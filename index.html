@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00fff7" charset="UTF-8">
+<title>Cyberpunk Cooldown Todo</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+body {
+    background: radial-gradient(circle at top, #0f2027, #000);
+    color: #00fff7;
+    font-family: 'Orbitron', sans-serif;
+    padding: 20px;
+    max-width: 800px;
+    margin: auto;
+}
+
+h1, h2 {
+    text-align: center;
+    text-shadow: 0 0 10px #00fff7;
+}
+
+input, button {
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+    outline: none;
+    background: #111;
+    color: #00fff7;
+    box-shadow: 0 0 10px #00fff744;
+}
+
+button {
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: #00fff7;
+    color: black;
+}
+
+.row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.task {
+    background: linear-gradient(135deg, #0ff2, #000);
+    border: 1px solid #00fff7;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 0 15px #00fff744;
+    cursor: grab;
+}
+
+.task.dragging {
+    opacity: 0.5;
+}
+
+.priority {
+    color: #ff00ff;
+    font-weight: bold;
+}
+
+.completed {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.timer {
+    font-size: 0.75em;
+    color: #aaa;
+}
+
+.list {
+    min-height: 50px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>⚡ Cyberpunk Cooldown Todo</h1>
+
+<div class="row">
+    <input id="taskInput" placeholder="Mission name">
+    <input id="priorityInput" type="number" placeholder="Priority">
+    <input id="cooldownInput" type="number" placeholder="Cooldown (sec)">
+    <button onclick="addTask()">Add</button>
+</div>
+
+<h2>🔥 Active Missions</h2>
+<div id="taskList" class="list"></div>
+
+<h2>💀 Cooldown Bay</h2>
+<div id="completedList" class="list"></div>
+
+<audio id="ping">
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
+</audio>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+let completedTasks = JSON.parse(localStorage.getItem("completedTasks")) || [];
+
+function save() {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+    localStorage.setItem("completedTasks", JSON.stringify(completedTasks));
+}
+
+function addTask() {
+    const name = taskInput.value.trim();
+    const priority = parseInt(priorityInput.value);
+    const cooldown = parseInt(cooldownInput.value);
+
+    if (!name || isNaN(priority) || isNaN(cooldown)) return;
+
+    tasks.push({ name, priority, cooldown });
+    taskInput.value = "";
+    priorityInput.value = "";
+    cooldownInput.value = "";
+    save();
+    render();
+}
+
+function completeTask(index) {
+    const task = tasks.splice(index, 1)[0];
+    task.remaining = task.cooldown;
+    completedTasks.push(task);
+    save();
+    render();
+}
+
+function tickTimers() {
+    completedTasks.forEach((task, i) => {
+        task.remaining--;
+
+        if (task.remaining <= 0) {
+            delete task.remaining;
+            tasks.push(task);
+            completedTasks.splice(i, 1);
+            document.getElementById("ping").play();
+        }
+    });
+    save();
+    render();
+}
+
+function render() {
+    tasks.sort((a, b) => b.priority - a.priority);
+
+    taskList.innerHTML = "";
+    completedList.innerHTML = "";
+
+    tasks.forEach((task, index) => {
+        const div = document.createElement("div");
+        div.className = "task";
+        div.draggable = true;
+
+        div.innerHTML = `
+            <div>
+                ${task.name} <span class="priority">[P${task.priority}]</span>
+            </div>
+            <div>
+                <button onclick="editTask(${index})">Edit</button>
+                <button onclick="completeTask(${index})">Complete</button>
+            </div>
+        `;
+
+
+        addDragHandlers(div, index);
+        taskList.appendChild(div);
+    });
+
+    completedTasks.forEach(task => {
+        const div = document.createElement("div");
+        div.className = "task completed";
+        div.innerHTML = `
+            <div>
+                ${task.name}
+                <span class="timer">Cooldown: ${task.remaining}s</span>
+            </div>
+        `;
+        completedList.appendChild(div);
+    });
+}
+
+let dragIndex = null;
+
+function addDragHandlers(el, index) {
+    el.addEventListener("dragstart", () => {
+        dragIndex = index;
+        el.classList.add("dragging");
+    });
+
+    el.addEventListener("dragend", () => {
+        dragIndex = null;
+        el.classList.remove("dragging");
+    });
+
+    el.addEventListener("dragover", e => e.preventDefault());
+
+    el.addEventListener("drop", () => {
+        const targetIndex = index;
+        const temp = tasks[dragIndex];
+        tasks[dragIndex] = tasks[targetIndex];
+        tasks[targetIndex] = temp;
+        save();
+        render();
+    });
+}
+
+let editingIndex = null;
+
+function editTask(index) {
+    editingIndex = index;
+    const task = tasks[index];
+
+    editName.value = task.name;
+    editPriority.value = task.priority;
+    editCooldown.value = task.cooldown;
+
+    document.getElementById("editModal").style.display = "block";
+}
+
+function closeEdit() {
+    document.getElementById("editModal").style.display = "none";
+}
+
+function saveEdit() {
+    const task = tasks[editingIndex];
+
+    task.name = editName.value.trim();
+    task.priority = parseInt(editPriority.value);
+    task.cooldown = parseInt(editCooldown.value);
+
+    save();
+    render();
+    closeEdit();
+}
+
+function deleteTask() {
+    if (!confirm("Delete this mission?")) return;
+
+    tasks.splice(editingIndex, 1);
+    save();
+    render();
+    closeEdit();
+}
+
+
+// Timer loop
+setInterval(tickTimers, 1000);
+render();
+</script>
+
+<!-- Edit Modal -->
+<div id="editModal" style="display:none; position:fixed; inset:0; background:#000c; backdrop-filter:blur(6px);">
+  <div style="max-width:400px; margin:10% auto; background:#111; padding:20px; border:1px solid #00fff7; border-radius:10px; box-shadow:0 0 30px #00fff7;">
+    <h2>Edit Mission</h2>
+
+    <input id="editName" placeholder="Mission name"><br><br>
+    <input id="editPriority" type="number" placeholder="Priority"><br><br>
+    <input id="editCooldown" type="number" placeholder="Cooldown (sec)"><br><br>
+
+    <button onclick="saveEdit()">Save</button>
+    <button onclick="deleteTask()">Delete</button>
+    <button onclick="closeEdit()">Cancel</button>
+  </div>
+</div>
+
+
+</body>
+</html>
