@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#00fff7" charset="UTF-8">
+<meta charset="UTF-8">
+<meta name="theme-color" content="#00fff7">
 <title>Cyberpunk Cooldown Todo</title>
+
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
@@ -93,7 +95,10 @@ button:hover {
 <div class="row">
     <input id="taskInput" placeholder="Mission name">
     <input id="priorityInput" type="number" placeholder="Priority">
-    <input id="cooldownInput" type="number" placeholder="Cooldown (sec)">
+    <input id="cooldownHours" type="number" placeholder="Hours" min="0">
+    <input id="cooldownMinutes" type="number" placeholder="Minutes" min="0" max="59">
+    <input id="cooldownSeconds" type="number" placeholder="Seconds" min="0" max="59">
+
     <button onclick="addTask()">Add</button>
 </div>
 
@@ -119,14 +124,22 @@ function save() {
 function addTask() {
     const name = taskInput.value.trim();
     const priority = parseInt(priorityInput.value);
-    const cooldown = parseInt(cooldownInput.value);
 
-    if (!name || isNaN(priority) || isNaN(cooldown)) return;
+    const h = parseInt(cooldownHours.value) || 0;
+    const m = parseInt(cooldownMinutes.value) || 0;
+    const s = parseInt(cooldownSeconds.value) || 0;
+
+    const cooldown = h * 3600 + m * 60 + s;
+
+    if (!name || isNaN(priority) || cooldown <= 0) return;
 
     tasks.push({ name, priority, cooldown });
     taskInput.value = "";
     priorityInput.value = "";
-    cooldownInput.value = "";
+    cooldownHours.value = "";
+    cooldownMinutes.value = "";
+    cooldownSeconds.value = "";
+
     save();
     render();
 }
@@ -140,7 +153,8 @@ function completeTask(index) {
 }
 
 function tickTimers() {
-    completedTasks.forEach((task, i) => {
+    for (let i = completedTasks.length - 1; i >= 0; i--) {
+        const task = completedTasks[i];
         task.remaining--;
 
         if (task.remaining <= 0) {
@@ -149,10 +163,12 @@ function tickTimers() {
             completedTasks.splice(i, 1);
             document.getElementById("ping").play();
         }
-    });
+    }
     save();
     render();
 }
+
+
 
 function render() {
     tasks.sort((a, b) => b.priority - a.priority);
@@ -186,12 +202,21 @@ function render() {
         div.innerHTML = `
             <div>
                 ${task.name}
-                <span class="timer">Cooldown: ${task.remaining}s</span>
+                <span class="timer">Cooldown: ${formatTime(task.remaining)}</span>
             </div>
         `;
         completedList.appendChild(div);
     });
 }
+
+function formatTime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+
+    return `${h}h ${m}m ${s}s`;
+}
+
 
 let dragIndex = null;
 
@@ -226,10 +251,18 @@ function editTask(index) {
 
     editName.value = task.name;
     editPriority.value = task.priority;
-    editCooldown.value = task.cooldown;
+
+    const h = Math.floor(task.cooldown / 3600);
+    const m = Math.floor((task.cooldown % 3600) / 60);
+    const s = task.cooldown % 60;
+
+    editHours.value = h;
+    editMinutes.value = m;
+    editSeconds.value = s;
 
     document.getElementById("editModal").style.display = "block";
 }
+
 
 function closeEdit() {
     document.getElementById("editModal").style.display = "none";
@@ -238,14 +271,19 @@ function closeEdit() {
 function saveEdit() {
     const task = tasks[editingIndex];
 
+    const h = parseInt(editHours.value) || 0;
+    const m = parseInt(editMinutes.value) || 0;
+    const s = parseInt(editSeconds.value) || 0;
+
     task.name = editName.value.trim();
     task.priority = parseInt(editPriority.value);
-    task.cooldown = parseInt(editCooldown.value);
+    task.cooldown = h * 3600 + m * 60 + s;
 
     save();
     render();
     closeEdit();
 }
+
 
 function deleteTask() {
     if (!confirm("Delete this mission?")) return;
@@ -269,13 +307,24 @@ render();
 
     <input id="editName" placeholder="Mission name"><br><br>
     <input id="editPriority" type="number" placeholder="Priority"><br><br>
-    <input id="editCooldown" type="number" placeholder="Cooldown (sec)"><br><br>
+    <input id="editHours" type="number" placeholder="Hours">
+    <input id="editMinutes" type="number" placeholder="Minutes" min="0" max="59">
+    <input id="editSeconds" type="number" placeholder="Seconds" min="0" max="59">
+    <br><br>
 
     <button onclick="saveEdit()">Save</button>
     <button onclick="deleteTask()">Delete</button>
     <button onclick="closeEdit()">Cancel</button>
   </div>
 </div>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./service-worker.js")
+    .then(() => console.log("Service Worker Registered"))
+    .catch(err => console.error("SW registration failed:", err));
+}
+</script>
 
 
 </body>
